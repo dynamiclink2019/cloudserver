@@ -13,6 +13,7 @@ const basicConfig = {
 function getObjectLockParams(paramToChange) {
     const newParam = {};
     const objectLockConfig = {
+        ObjectLockEnabled: 'Enabled',
         Rule: {
             DefaultRetention: basicConfig,
         },
@@ -47,17 +48,17 @@ describe('aws-sdk test put bucket object lock', () => {
 
     it('should return NoSuchBucket error if bucket does not exist', done => {
         const params = getObjectLockParams();
-        s3.putBucketObjectLock(params, err =>
+        s3.putObjectLockConfiguration(params, err =>
             assertError(err, 'NoSuchBucket', done));
     });
 
     describe('without object lock enabled', () => {
         beforeEach(done => s3.createBucket({ Bucket: bucket }, done));
 
-        it('should return InvalidState', done => {
+        it('should return InvalidBucketState', done => {
             const params = getObjectLockParams();
-            s3.putBucketObjectLock(params, err =>
-                assertError(err, 'InvalidState', done));
+            s3.putObjectLockConfiguration(params, err =>
+                assertError(err, 'InvalidBucketState', done));
         });
     });
 
@@ -71,19 +72,19 @@ describe('aws-sdk test put bucket object lock', () => {
 
         it('should return AccessDenied if user is not bucket owner', done => {
             const params = getObjectLockParams();
-            otherAccountS3.putBucketObjectLock(params,
+            otherAccountS3.putObjectLockConfiguration(params,
                 err => assertError(err, 'AccessDenied', done));
         });
 
         it('should put object lock configuration on bucket', done => {
             const params = getObjectLockParams();
-            s3.putBucketObjectLock(params, err =>
+            s3.putObjectLockConfiguration(params, err =>
                 assertError(err, null, done));
         });
 
         it('should not allow object lock config with empty Rule', done => {
             const params = getObjectLockParams({ key: 'Rule', value: {} });
-            s3.putBucketObjectLock(params, err =>
+            s3.putObjectLockConfiguration(params, err =>
                 assertError(err, 'MalformedXML', done));
         });
 
@@ -91,13 +92,13 @@ describe('aws-sdk test put bucket object lock', () => {
         done => {
             const params = getObjectLockParams(
                 { key: 'DefaultRetention', value: {} });
-            s3.putBucketObjectLock(params, err =>
+            s3.putObjectLockConfiguration(params, err =>
                 assertError(err, 'MalformedXML', done));
         });
 
         it('should not allow object lock config with empty Mode', done => {
             const params = getObjectLockParams({ key: 'Mode', value: '' });
-            s3.putBucketObjectLock(params, err =>
+            s3.putObjectLockConfiguration(params, err =>
                 assertError(err, 'MalformedXML', done));
         });
 
@@ -105,25 +106,25 @@ describe('aws-sdk test put bucket object lock', () => {
         done => {
             const params =
                 getObjectLockParams({ key: 'Mode', value: 'GOVERPLIANCE' });
-            s3.putBucketObjectLock(params, err =>
+            s3.putObjectLockConfiguration(params, err =>
                 assertError(err, 'InvalidArgument', done));
         });
 
         it('should not allow object lock config with empty Days', done => {
             const params = getObjectLockParams({ key: 'Days', value: '' });
-            s3.putBucketObjectLock(params, err =>
+            s3.putObjectLockConfiguration(params, err =>
                 assertError(err, 'MalformedXML', done));
         });
 
         it('should not allow object lock config with 0 Days', done => {
             const params = getObjectLockParams({ key: 'Days', value: 0 });
-            s3.putBucketObjectLock(params, err =>
+            s3.putObjectLockConfiguration(params, err =>
                 assertError(err, 'MalformedXML', done));
         });
 
         it('should not allow object lock config with invalid Days', done => {
             const params = getObjectLockParams({ key: 'Days', value: 'one' });
-            s3.putBucketObjectLock(params, err =>
+            s3.putObjectLockConfiguration(params, err =>
                 assertError(err, 'MalformedXML', done));
         });
 
@@ -133,7 +134,7 @@ describe('aws-sdk test put bucket object lock', () => {
                 key: 'DefaultRetention',
                 value: { Mode: 'GOVERNANCE', Days: 1, Years: 1 },
             });
-            s3.putBucketObjectLock(params, err =>
+            s3.putObjectLockConfiguration(params, err =>
                 assertError(err, 'MalformedXML', done));
         });
     });
