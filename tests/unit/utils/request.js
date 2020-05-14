@@ -64,11 +64,13 @@ qpUgAEJjy9v59F76feVtJA==
 -----END PRIVATE KEY-----`;
 
 const postJson = { key: 'value' };
+const postJsonStringified = JSON.stringify(postJson);
 const postData = 'postrequest';
 
-function respondWithError(req, res, code) {
+function respondWithError(req, res, code, message) {
     // eslint-disable-next-line no-param-reassign
     res.statusCode = code;
+    res.statusMessage = message;
     res.end();
 }
 
@@ -84,11 +86,15 @@ function handlePostRequest(req, res, expected) {
     });
     req.on('end', () => {
         if (rawData !== expected) {
-            return respondWithError(req, res, 500);
+            return respondWithError(req, res, 400, 'incorrect body value');
         }
         res.write('post completed');
         return res.end();
     });
+}
+
+function checkForHeaders(results, expected) {
+    assert(Object.keys(expected).every(key => results[key] === expected[key]));
 }
 
 function testHandler(req, res) {
@@ -96,13 +102,15 @@ function testHandler(req, res) {
         case '/raw':
             return respondWithValue(req, res, 'bitsandbytes');
         case '/json':
-            return respondWithValue(req, res, JSON.stringify({ key: 'value' }));
+            return respondWithValue(req, res, postJsonStringified);
         case '/post':
             if (req.method !== 'POST') return respondWithError(req, res, 405);
             return handlePostRequest(req, res, postData);
         case '/postjson':
             if (req.method !== 'POST') return respondWithError(req, res, 405);
-            return handlePostRequest(req, res, JSON.stringify(postJson));
+            return handlePostRequest(req, res, postJsonStringified);
+        case '/postempty':
+            return handlePostRequest(req, res, '');
         default:
             return respondWithValue(req, res, 'default');
     }
@@ -223,6 +231,34 @@ function createTestServer(proto, hostname, port, handler, callback) {
                         done();
                     });
             });
+
+            it('should set method to GET if it is missing', done => {
+                const req = request.request(`${host}`,
+                    (err, res) => {
+                        assert.ifError(err);
+                        assert.equal(res.statusCode, 200);
+                        assert.equal(req.method, 'GET');
+                        done();
+                    });
+            })
+
+            it('should set headers', done => {
+                const req = request.request(`${host}`, {
+                        headers: {
+                            'TEST-HEADERS-ONE': 'test-value-one',
+                            'TEST-HEADERS-TWO': 'test-value-two',
+                        },
+                    },
+                    (err, res) => {
+                        assert.ifError(err);
+                        assert.equal(res.statusCode, 200);
+                        checkForHeaders(req.getHeaders(), {
+                            'test-headers-one': 'test-value-one',
+                            'test-headers-two': 'test-value-two',
+                        });
+                        done();
+                    });
+            });
         });
 
         describe('post', () => {
@@ -245,6 +281,52 @@ function createTestServer(proto, hostname, port, handler, callback) {
                         done();
                     });
             });
+
+            it('should post with empty body', done => {
+                request.post(`${host}/postempty`,
+                    (err, res, body) => {
+                        assert.ifError(err);
+                        assert.equal(res.statusCode, 200);
+                        assert.equal(body, 'post completed');
+                        done();
+                    });
+            });
+
+            it('should set content-type JSON if missing', done => {
+                const req = request.post(`${host}`, {
+                        body: postJson,
+                        headers: { 'EXTRA': 'header' },
+                    },
+                    (err, res) => {
+                        assert.ifError(err);
+                        assert.equal(res.statusCode, 200);
+                        checkForHeaders(req.getHeaders(), {
+                            'content-type': 'application/json',
+                            'content-length':
+                                Buffer.byteLength(postJsonStringified),
+                            'extra': 'header',
+                        });
+                        done();
+                    });
+            });
+
+            it('should not overwrite existing content-type header value',
+                done => {
+                    const req = request.post(`${host}`, {
+                        body: postJson,
+                        headers: { 'Content-Type': 'text/plain' },
+                    },
+                    (err, res) => {
+                        assert.ifError(err);
+                        assert.equal(res.statusCode, 200);
+                        checkForHeaders(req.getHeaders(), {
+                            'content-type': 'text/plain',
+                            'content-length':
+                                Buffer.byteLength(postJsonStringified),
+                        });
+                        done();
+                    });
+                });
         });
     });
 });
@@ -277,5 +359,26 @@ describe('utilities::request error handling', () => {
             assert(err);
             done();
         });
+    });
+});
+
+describe('utilities::createHeaders', () => {
+    it('should return an empty object if the argument is missing', () => {
+        assert.deepStrictEqual(request.createHeaders(), {});
+    });
+
+    it('should return correct header object', () => {
+        assert.deepStrictEqual(
+            request.createHeaders({
+                'CONTENT-TYPE': 'test/one',
+                'content-type': 'test/two',
+                'content-length': 1,
+                'CONTENT-LENGTH': 1,
+            }),
+            {
+                'content-type': 'test/one',
+                'content-length': 1,
+            }
+        )
     });
 });
